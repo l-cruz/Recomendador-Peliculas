@@ -28,4 +28,5 @@ class SaveMovie:
             "poster_path": movie_data.get("poster_path")
         }
 
-        return self.db_client.execute(movie_to_save)
+        self.db_client.execute(movie_to_save)
+        return f"Película '{movie_to_save['title']}' guardada/actualizada con éxito en el catálogo local."
