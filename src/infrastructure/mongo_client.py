@@ -1,19 +1,10 @@
-import os
-from dotenv import load_dotenv
-from pymongo import ASCENDING, DESCENDING, TEXT, MongoClient
-
-load_dotenv()
-
+from pymongo import ASCENDING, DESCENDING, TEXT
+from src.infrastructure.db_connection import get_db
 
 class MongoDBClient:
     def __init__(self):
-        uri = os.getenv("MONGO_URI")
-        if not uri:
-            raise ValueError("No se ha encontrado la variable de entorno MONGO_URI.")
-
-        self.client = MongoClient(uri)
-        self.db = self.client["recomendador_db"]
-        self.collection = self.db["peliculas"]
+        db = get_db()
+        self.collection = db["peliculas"]
         self._ensure_indexes()
 
     def _ensure_indexes(self) -> None:
@@ -32,6 +23,16 @@ class MongoDBClient:
             [("title", TEXT), ("overview", TEXT)],
             name="idx_fulltext",
             default_language="spanish"
+        )
+
+        self.collection.create_index(
+            [("popularity", DESCENDING)],
+            name="idx_popularity"
+        )
+
+        self.collection.create_index(
+            [("vote_average", DESCENDING), ("vote_count", DESCENDING)],
+            name="idx_rating_count"
         )
 
     def execute(self, document: dict) -> str:

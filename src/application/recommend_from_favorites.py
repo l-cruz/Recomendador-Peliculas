@@ -46,14 +46,17 @@ class RecommendFromFavorites:
             for genre_doc in raw_profile
         ]
 
+        # 2. Sacamos los IDs de las favoritas para NO recomendarlas de nuevo
         favorites = self.user_repo.get_favorites(user_id)
         favorite_ids = [favorite["tmdb_id"] for favorite in favorites if "tmdb_id" in favorite]
 
+        # 3. Pipeline para buscar recomendaciones (YA CORREGIDO)
         recommendations_pipeline = [
             {
                 "$match": {
                     "genres": {"$in": top_genres},
                     "tmdb_id": {"$nin": favorite_ids}
+                    # ELIMINADO: La restricción de vote_count para que encuentre las 1300 pelis antiguas
                 }
             },
             {
@@ -65,6 +68,7 @@ class RecommendFromFavorites:
                     }
                 }
             },
+            # ELIMINADO: vote_count del sort. Ahora ordena solo por coincidencia de géneros y nota media.
             {"$sort": {"generos_coincidentes": -1, "vote_average": -1}},
             {"$limit": limit},
             {
