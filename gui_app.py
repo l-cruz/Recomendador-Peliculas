@@ -318,7 +318,12 @@ class VentanaRecomendador:
             )
 
             if not det:
-                det = GetMovieDetails().execute(movie_id=movie_id)
+                try:
+                    det = GetMovieDetails().execute(movie_id=movie_id)
+                except Exception as e:
+                    print(f"Error obteniendo detalles de TMDB: {e}")
+                    win.destroy()
+                    return
 
             self.imprimir_pelicula(det)
             win.destroy()
@@ -329,8 +334,13 @@ class VentanaRecomendador:
             ya_existe = self.db_client.collection.find_one({"tmdb_id": movie_id})
 
             if not ya_existe:
-                det = GetMovieDetails().execute(movie_id=movie_id)
-                SaveMovie().execute(movie_data=det)
+                try:
+                    det = GetMovieDetails().execute(movie_id=movie_id)
+                    SaveMovie().execute(movie_data=det)
+                except Exception as e:
+                    print(f"Error guardando la película desde TMDB: {e}")
+                    win.destroy()
+                    return
 
             uid = str(self.usuario_actual["_id"])
             self.user_repo.add_to_my_catalog(uid, movie_id)
@@ -344,8 +354,13 @@ class VentanaRecomendador:
             ya_existe = self.db_client.collection.find_one({"tmdb_id": movie_id})
 
             if not ya_existe:
-                det = GetMovieDetails().execute(movie_id=movie_id)
-                SaveMovie().execute(movie_data=det)
+                try:
+                    det = GetMovieDetails().execute(movie_id=movie_id)
+                    SaveMovie().execute(movie_data=det)
+                except Exception as e:
+                    print(f"Error guardando la favorita desde TMDB: {e}")
+                    win.destroy()
+                    return
 
             uid = str(self.usuario_actual["_id"])
             self.user_repo.add_to_my_catalog(uid, movie_id)
@@ -384,15 +399,25 @@ class VentanaRecomendador:
     def opcion_tmdb(self) -> None:
         dialogo = DialogoPersonalizado(self.root, "TMDB", "¿Qué película quieres buscar?")
         self.root.wait_window(dialogo)
+
         query = dialogo.result
         if not query:
             return
+
         print(f"\nBuscando '{query}' en TMDB...")
-        res = SearchMovies().execute(query=query)
+
+        try:
+            res = SearchMovies().execute(query=query)
+        except Exception as e:
+            print(f"Error de conexión con TMDB: {e}")
+            print("Comprueba tu conexión a internet o el estado de la API.")
+            return
+
         if res.get("results"):
             top = res["results"][:12]
             sel = SelectorPeliculas(self.root, "Películas Encontradas", top)
             self.root.wait_window(sel)
+
             if isinstance(sel.result, int):
                 self.mostrar_menu_accion(top[sel.result])
         else:
@@ -474,31 +499,43 @@ class VentanaRecomendador:
 
     def opcion_recomendar_favoritos(self) -> None:
         uid = str(self.usuario_actual["_id"])
-        print("\nCalculando recomendaciones personalizadas...")
 
-        favs = self.user_repo.get_favorites(uid)
-        if not favs:
-            print("Necesitas al menos una favorita para recibir recomendaciones personalizadas.")
+        print("\n--- Recomendaciones basadas en tus favoritas ---")
+
+        try:
+            res = RecommendFromFavorites().execute(user_id=uid, limit=10)
+        except Exception as e:
+            print(f"Error generando recomendaciones: {e}")
+            print("Revisa que tus favoritas existan también en la colección de películas.")
             return
 
-        res = RecommendFromFavorites().execute(user_id=uid)
+        perfil = res.get("perfil_generos", [])
+        recomendaciones = res.get("recomendaciones", [])
 
-        if not res.get("recomendaciones"):
-            print("No tengo suficientes películas en tu catálogo local parecidas a tus favoritas.")
-            print("Prueba a descargar o guardar más películas de esos géneros para que la IA tenga de dónde elegir!")
+        if not perfil:
+            print("Aún no hay suficientes favoritas para construir tu perfil.")
             return
 
-        print("\nTu perfil de géneros favoritos:")
-        for g in res["perfil_generos"]:
-            print(f"  - {g['genero']} ({g['frecuencia']} película/s)")
+        print("\nTu perfil de géneros:")
+        for g in perfil:
+            print(
+                f"   {g['genero']}: "
+                f"frecuencia={g['frecuencia']}, "
+                f"nota media={g['nota_media_personal']}/10, "
+                f"peso={g['peso']}"
+            )
 
-        print("\n--- Recomendaciones Para Ti ---")
-        recomendaciones = res["recomendaciones"]
-        for p in recomendaciones:
-            self.imprimir_pelicula(p)
+        if not recomendaciones:
+            print("\nNo se encontraron recomendaciones nuevas.")
+            return
+
+        print("\nPelículas recomendadas:")
+        for peli in recomendaciones:
+            self.imprimir_pelicula(peli)
 
         sel = SelectorPeliculas(self.root, "Recomendaciones IA", recomendaciones)
         self.root.wait_window(sel)
+
         if isinstance(sel.result, int):
             self.mostrar_menu_accion(recomendaciones[sel.result])
 
