@@ -21,7 +21,7 @@ class MongoDBClient:
                 ("release_year", ASCENDING),
                 ("vote_average", DESCENDING)
             ],
-            name="idx_genres_year_score"
+            name="idx_genres_year_score_2"
         )
 
         self.collection.create_index(
