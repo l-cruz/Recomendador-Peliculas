@@ -306,35 +306,63 @@ class VentanaRecomendador:
         ).pack(pady=15)
 
         def ver_detalles():
-            det = GetMovieDetails().execute(movie_id=peli.get("id") or peli.get("tmdb_id"))
+            movie_id = peli.get("id") or peli.get("tmdb_id")
+
+            det = self.db_client.collection.find_one(
+                {"tmdb_id": movie_id},
+                {"_id": 0}
+            )
+
+            if not det:
+                det = GetMovieDetails().execute(movie_id=movie_id)
+
             self.imprimir_pelicula(det)
             win.destroy()
 
         def guardar():
-            det = GetMovieDetails().execute(movie_id=peli.get("id") or peli.get("tmdb_id"))
-            SaveMovie().execute(movie_data=det)
+            movie_id = peli.get("id") or peli.get("tmdb_id")
+
+            ya_existe = self.db_client.collection.find_one({"tmdb_id": movie_id})
+
+            if not ya_existe:
+                det = GetMovieDetails().execute(movie_id=movie_id)
+                SaveMovie().execute(movie_data=det)
+
             uid = str(self.usuario_actual["_id"])
-            self.user_repo.add_to_my_catalog(uid, peli.get("id") or peli.get("tmdb_id"))
-            print(f"Guardada en tu catálogo personal!")
+            self.user_repo.add_to_my_catalog(uid, movie_id)
+
+            print("Guardada en tu catálogo personal!")
             win.destroy()
 
         def fav():
             movie_id = peli.get("id") or peli.get("tmdb_id")
-            det = GetMovieDetails().execute(movie_id=movie_id)
-            SaveMovie().execute(movie_data=det)
+
+            ya_existe = self.db_client.collection.find_one({"tmdb_id": movie_id})
+
+            if not ya_existe:
+                det = GetMovieDetails().execute(movie_id=movie_id)
+                SaveMovie().execute(movie_data=det)
+
             uid = str(self.usuario_actual["_id"])
             self.user_repo.add_to_my_catalog(uid, movie_id)
+
             dialogo = DialogoPersonalizado(win, "Rating", "Tu nota (1-10):")
             win.wait_window(dialogo)
+
             try:
                 nota = int(dialogo.result)
                 if 1 <= nota <= 10:
-                    res = AddFavorite().execute(user_id=uid, tmdb_id=movie_id, personal_rating=nota)
+                    res = AddFavorite().execute(
+                        user_id=uid,
+                        tmdb_id=movie_id,
+                        personal_rating=nota
+                    )
                     print(f"{res['mensaje']}")
                 else:
                     print("La nota debe estar entre 1 y 10.")
             except (TypeError, ValueError):
-                pass
+                print("Nota no válida. Introduce un número entre 1 y 10.")
+
             win.destroy()
 
         btn_cfg = {**self.btn_style, "relief": "flat", "cursor": "hand2"}
@@ -387,15 +415,20 @@ class VentanaRecomendador:
     def opcion_ver_todo(self) -> None:
         print("\n--- Tu Catálogo Personal ---")
         uid = str(self.usuario_actual["_id"])
-        mis_ids = self.user_repo.get_my_catalog_ids(uid)
-        if not mis_ids:
+
+        mis_pelis = self.user_repo.get_my_catalog_with_details(uid)
+        if not mis_pelis:
             print("Tu catálogo está vacío.")
             return
-        mis_pelis = list(self.db_client.collection.find({"tmdb_id": {"$in": mis_ids}}))
+
+        print(f"Tienes {len(mis_pelis)} películas en tu catálogo.\n")
+
         for p in mis_pelis:
             self.imprimir_pelicula(p)
+
         sel = SelectorPeliculas(self.root, "Mi Colección Privada", mis_pelis)
         self.root.wait_window(sel)
+
         if isinstance(sel.result, int):
             self.mostrar_menu_accion(mis_pelis[sel.result])
 
