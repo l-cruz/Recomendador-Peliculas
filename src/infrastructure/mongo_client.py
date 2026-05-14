@@ -15,7 +15,12 @@ class MongoDBClient:
         )
 
         self.collection.create_index(
-            [("genres", ASCENDING), ("release_year", ASCENDING), ("vote_average", DESCENDING)],
+            [
+                ("genres", ASCENDING),
+                ("vote_count", ASCENDING),
+                ("release_year", ASCENDING),
+                ("vote_average", DESCENDING)
+            ],
             name="idx_genres_year_score"
         )
 

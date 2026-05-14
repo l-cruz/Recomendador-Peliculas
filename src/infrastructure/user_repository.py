@@ -21,10 +21,8 @@ class UserRepository:
             [("favorites.tmdb_id", ASCENDING)],
             name="idx_favorites_tmdb_id"
         )
-        self.collection.create_index(
-            [("my_catalog", ASCENDING)],
-            name="idx_my_catalog"
-        )
+        # No se indexa my_catalog porque no se consulta usuarios por ese campo.
+        # El flujo correcto es: extraer IDs del usuario → buscar películas por tmdb_id.
 
     # ──────────────────────────────────────────
     # Helpers
