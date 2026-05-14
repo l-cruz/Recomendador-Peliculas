@@ -65,6 +65,42 @@ class UserRepository:
         )
         return user.get("my_catalog", []) if user else []
 
+    def get_my_catalog_with_details(self, user_id: str) -> list:
+        """
+        Devuelve las películas del catálogo personal del usuario con sus detalles,
+        usando $lookup para cruzar usuarios con peliculas en una sola agregación.
+        """
+        pipeline = [
+            {"$match": {"_id": self._to_object_id(user_id)}},
+            {
+                "$lookup": {
+                    "from": "peliculas",
+                    "localField": "my_catalog",
+                    "foreignField": "tmdb_id",
+                    "as": "catalog_movies"
+                }
+            },
+            {"$unwind": "$catalog_movies"},
+            {
+                "$project": {
+                    "_id": 0,
+                    "tmdb_id": "$catalog_movies.tmdb_id",
+                    "title": "$catalog_movies.title",
+                    "genres": "$catalog_movies.genres",
+                    "vote_average": "$catalog_movies.vote_average",
+                    "vote_count": "$catalog_movies.vote_count",
+                    "release_date": "$catalog_movies.release_date",
+                    "release_year": "$catalog_movies.release_year",
+                    "overview": "$catalog_movies.overview",
+                    "runtime": "$catalog_movies.runtime",
+                    "poster_path": "$catalog_movies.poster_path",
+                    "popularity": "$catalog_movies.popularity"
+                }
+            },
+            {"$sort": {"popularity": DESCENDING, "vote_average": DESCENDING}}
+        ]
+        return list(self.collection.aggregate(pipeline))
+
     # ──────────────────────────────────────────
     # Favoritos
     # ──────────────────────────────────────────
@@ -100,6 +136,24 @@ class UserRepository:
         result = self.collection.update_one(
             {"_id": self._to_object_id(user_id)},
             {"$pull": {"favorites": {"tmdb_id": tmdb_id}}}
+        )
+        return result.modified_count > 0
+
+    def update_favorite_rating(self, user_id: str, tmdb_id: int, new_rating: int) -> bool:
+        """
+        Actualiza la puntuación personal de una película favorita existente.
+        Usa el operador posicional $ para modificar solo la favorita correcta.
+        """
+        result = self.collection.update_one(
+            {
+                "_id": self._to_object_id(user_id),
+                "favorites.tmdb_id": tmdb_id
+            },
+            {
+                "$set": {
+                    "favorites.$.personal_rating": new_rating
+                }
+            }
         )
         return result.modified_count > 0
 
