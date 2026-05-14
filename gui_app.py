@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk, simpledialog
 
 from src.application.add_favorite import AddFavorite
+from src.application.get_user_stats import GetUserStats
+from src.application.update_favorite_rating import UpdateFavoriteRating
 from src.application.get_movie_details import GetMovieDetails
 from src.application.get_stats import GetStats
 from src.application.recommend_from_favorites import RecommendFromFavorites
@@ -202,7 +204,9 @@ class VentanaRecomendador:
             ("Recomendaciones IA", self.opcion_recomendar_favoritos),
             ("Añadir Favorita", self.opcion_add_fav),
             ("Quitar Favorita", self.opcion_remove_fav),
-            ("Estadísticas", self.opcion_stats),
+            ("Editar Mi Nota", self.opcion_editar_nota),
+            ("Mis Estadísticas", self.opcion_user_stats),
+            ("Stats del Catálogo", self.opcion_stats),
             ("Cerrar Sesión", self._on_close),
         ]
 
@@ -533,6 +537,117 @@ class VentanaRecomendador:
             p = favs[sel.result]
             res = RemoveFavorite().execute(user_id=uid, tmdb_id=p["tmdb_id"])
             print(f"{res['mensaje']}")
+
+    def opcion_editar_nota(self) -> None:
+        uid = str(self.usuario_actual["_id"])
+
+        favs = self.user_repo.get_favorites(uid)
+        if not favs:
+            print("No tienes favoritas.")
+            return
+
+        sel = SelectorPeliculas(self.root, "¿Qué nota quieres cambiar?", favs)
+        self.root.wait_window(sel)
+
+        if not isinstance(sel.result, int):
+            return
+
+        pelicula = favs[sel.result]
+        nota_actual = pelicula.get("personal_rating", "sin nota")
+
+        dialogo = DialogoPersonalizado(
+            self.root,
+            "Nueva Nota",
+            f"Nota actual: {nota_actual}/10\nNueva nota (1-10):"
+        )
+        self.root.wait_window(dialogo)
+
+        try:
+            nueva_nota = int(dialogo.result)
+            res = UpdateFavoriteRating().execute(
+                user_id=uid,
+                tmdb_id=pelicula["tmdb_id"],
+                new_rating=nueva_nota
+            )
+            print(res["mensaje"])
+        except (TypeError, ValueError):
+            print("Nota no válida. Introduce un número entre 1 y 10.")
+
+    def opcion_user_stats(self) -> None:
+        uid = str(self.usuario_actual["_id"])
+
+        print("\n══════════ Tus Estadísticas Personales ══════════")
+
+        st = GetUserStats().execute(user_id=uid)
+
+        if not st:
+            print("No hay datos suficientes todavía. Añade películas a favoritas primero.")
+            return
+
+        resumen = st.get("resumen", [{}])[0]
+        total_favs = resumen.get("total_favoritas", 0)
+        catalog_size = resumen.get("catalog_size", 0)
+
+        if total_favs == 0:
+            print("Aún no tienes favoritas. ¡Empieza a añadir películas!")
+            return
+
+        print(f"\nResumen de {self.usuario_actual['name']}")
+        print(f"   Películas en catálogo:   {catalog_size}")
+        print(f"   Películas favoritas:     {total_favs}")
+
+        nota_personal = resumen.get("nota_media_personal")
+        nota_tmdb = resumen.get("nota_media_tmdb")
+
+        if nota_personal:
+            print(f"   Tu nota media:          {round(nota_personal, 2)} / 10")
+
+        if nota_tmdb:
+            diferencia = round((nota_personal or 0) - nota_tmdb, 2)
+            signo = "+" if diferencia > 0 else ""
+
+            print(
+                f"   Nota media TMDB:        {round(nota_tmdb, 2)} / 10 "
+                f"(diferencia: {signo}{diferencia})"
+            )
+
+            if diferencia > 1:
+                print("   → Eres más generoso/a que la media de TMDB.")
+            elif diferencia < -1:
+                print("   → Eres más exigente que la media de TMDB.")
+            else:
+                print("   → Tu criterio está en línea con la media de TMDB.")
+
+        if st.get("top_generos"):
+            print("\nTus Géneros Favoritos")
+            for genero in st["top_generos"]:
+                avg = genero.get("avg_personal_rating")
+                str_avg = f"  (tu nota media: {round(avg, 1)}/10)" if avg else ""
+                print(f"   {genero['_id']:<22} {genero['count']} película/s{str_avg}")
+
+        if st.get("por_decada"):
+            print("\nTus Décadas Favoritas")
+            for decada in st["por_decada"]:
+                print(f"   {decada['_id']}s  →  {decada['total']} película/s")
+
+        mejor = st.get("mejor_puntuada", [{}])
+        peor = st.get("peor_puntuada", [{}])
+
+        if mejor and mejor[0].get("title"):
+            pelicula = mejor[0]
+            print(
+                f"\nTu película favorita:    "
+                f"{pelicula['title']} ({pelicula['personal_rating']}/10)"
+            )
+
+        if peor and peor[0].get("title"):
+            pelicula = peor[0]
+            print(
+                f"Tu película menos fav.:  "
+                f"{pelicula['title']} ({pelicula['personal_rating']}/10)"
+            )
+
+        print("\n" + "=" * 50 + "\n")
 
     def opcion_stats(self) -> None:
         print("\n══════════ Estadísticas del Catálogo ══════════")
