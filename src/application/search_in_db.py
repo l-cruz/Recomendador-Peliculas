@@ -20,10 +20,10 @@ class SearchInDB:
                 "release_date": 1,
                 "release_year": 1,
                 "overview": 1,
-                "relevancia": {"$meta": "textScore"}
+                "score": {"$meta": "textScore"}
             }
         ).sort([
-            ("relevancia", {"$meta": "textScore"})
+            ("score", {"$meta": "textScore"})
         ]).limit(limit)
 
         return list(cursor)

@@ -4,11 +4,6 @@ from src.infrastructure.db_connection import get_db
 
 
 class GetUserStats:
-    """
-    Genera estadísticas personalizadas del usuario a partir de sus favoritas,
-    cruzando la colección usuarios con peliculas mediante $lookup.
-    """
-
     def __init__(self):
         self.db = get_db()
 

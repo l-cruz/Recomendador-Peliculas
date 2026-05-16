@@ -12,28 +12,14 @@ class UserRepository:
         self.collection = db["usuarios"]
         self._ensure_indexes()
 
-    # ──────────────────────────────────────────
-    # Índices
-    # ──────────────────────────────────────────
-
     def _ensure_indexes(self) -> None:
         self.collection.create_index(
             [("favorites.tmdb_id", ASCENDING)],
             name="idx_favorites_tmdb_id"
         )
-        # No se indexa my_catalog porque no se consulta usuarios por ese campo.
-        # El flujo correcto es: extraer IDs del usuario → buscar películas por tmdb_id.
-
-    # ──────────────────────────────────────────
-    # Helpers
-    # ──────────────────────────────────────────
 
     def _to_object_id(self, user_id: str) -> ObjectId:
         return ObjectId(user_id)
-
-    # ──────────────────────────────────────────
-    # Usuarios
-    # ──────────────────────────────────────────
 
     def create_user(self, name: str) -> str:
         user_data = {
@@ -47,10 +33,6 @@ class UserRepository:
 
     def list_users(self) -> list:
         return list(self.collection.find({}, {"name": 1, "_id": 1}))
-
-    # ──────────────────────────────────────────
-    # Catálogo personal
-    # ──────────────────────────────────────────
 
     def add_to_my_catalog(self, user_id: str, tmdb_id: int) -> None:
         self.collection.update_one(
@@ -66,10 +48,6 @@ class UserRepository:
         return user.get("my_catalog", []) if user else []
 
     def get_my_catalog_with_details(self, user_id: str) -> list:
-        """
-        Devuelve las películas del catálogo personal del usuario con sus detalles,
-        usando $lookup para cruzar usuarios con peliculas en una sola agregación.
-        """
         pipeline = [
             {"$match": {"_id": self._to_object_id(user_id)}},
             {
@@ -100,10 +78,6 @@ class UserRepository:
             {"$sort": {"popularity": DESCENDING, "vote_average": DESCENDING}}
         ]
         return list(self.collection.aggregate(pipeline))
-
-    # ──────────────────────────────────────────
-    # Favoritos
-    # ──────────────────────────────────────────
 
     def add_favorite(self, user_id: str, tmdb_id: int, title: str,
                      personal_rating: int = None) -> bool:
@@ -140,10 +114,6 @@ class UserRepository:
         return result.modified_count > 0
 
     def update_favorite_rating(self, user_id: str, tmdb_id: int, new_rating: int) -> bool:
-        """
-        Actualiza la puntuación personal de una película favorita existente.
-        Usa el operador posicional $ para modificar solo la favorita correcta.
-        """
         result = self.collection.update_one(
             {
                 "_id": self._to_object_id(user_id),

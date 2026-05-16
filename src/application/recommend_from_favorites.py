@@ -10,7 +10,6 @@ class RecommendFromFavorites:
         self.db_client = MongoDBClient()
 
     def execute(self, user_id: str, limit: int = 10) -> dict:
-        # 1. Perfil de géneros: frecuencia + nota media personal por género
         genres_pipeline = [
             {"$match": {"_id": ObjectId(user_id)}},
             {"$unwind": "$favorites"},
@@ -87,7 +86,6 @@ class RecommendFromFavorites:
             for genre_doc in raw_profile
         ]
 
-        # 2. Sacamos los IDs de las favoritas para no recomendarlas de nuevo
         favorites = self.user_repo.get_favorites(user_id)
         favorite_ids = [
             favorite["tmdb_id"]
@@ -95,7 +93,6 @@ class RecommendFromFavorites:
             if "tmdb_id" in favorite
         ]
 
-        # 3. Preparamos las ramas del $switch para ponderar cada género
         genre_weight_branches = [
             {
                 "case": {"$eq": ["$$this", genre_doc["_id"]]},
@@ -104,7 +101,6 @@ class RecommendFromFavorites:
             for genre_doc in raw_profile
         ]
 
-        # 4. Pipeline de recomendaciones con score ponderado
         recommendations_pipeline = [
             {
                 "$match": {
@@ -114,7 +110,7 @@ class RecommendFromFavorites:
             },
             {
                 "$addFields": {
-                    "generos_coincidentes": {
+                    "matching_genres": {
                         "$size": {
                             "$setIntersection": ["$genres", top_genres]
                         }
@@ -161,7 +157,7 @@ class RecommendFromFavorites:
             {
                 "$sort": {
                     "recommendation_score": -1,
-                    "generos_coincidentes": -1,
+                    "matching_genres": -1,
                     "vote_average": -1
                 }
             },
@@ -176,7 +172,7 @@ class RecommendFromFavorites:
                     "release_date": 1,
                     "release_year": 1,
                     "overview": 1,
-                    "generos_coincidentes": 1,
+                    "matching_genres": 1,
                     "recommendation_score": {
                         "$round": ["$recommendation_score", 2]
                     }
